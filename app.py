@@ -182,10 +182,34 @@ def fetch_video_source(video_url):
         response = requests.get(video_url, headers=headers, timeout=15, proxies=proxies)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # ... (rest of the function remains the same)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            script_tags = soup.find_all("script")
+            for script in script_tags:
+                if script.string and "flashvars" in script.string:
+                    match = re.search(r'"quality_[0-9]+p":"([^"]+)"', script.string)  # Generalized match for any quality
+                    if match:
+                        return match.group(1).replace('\\', '')
+            video_tags = soup.find_all("video")
+            for video in video_tags:
+                if video.get('src') and 'mp4' in video.get('src'):  # Prefer MP4 if available
+                    return video.get('src')
+                source_tags = video.find_all("source")
+                for source in source_tags:
+                    if source.get('src') and 'mp4' in source.get('src'):
+                        return source.get('src')
+            video_data = re.search(r'var flashvars_\d+ = ({.*?});', response.text)
+            if video_data:
+                data = json.loads(video_data.group(1))
+                if 'mediaDefinitions' in data:
+                    for definition in data.get('mediaDefinitions', []):
+                        if 'mp4' in definition.get('videoUrl', '') and definition.get('videoUrl'):
+                            return definition.get('videoUrl')
+                        elif definition.get('videoUrl'):
+                            return definition.get('videoUrl')
     except Exception as e:
         logging.error(f"Error in fetch_video_source: {str(e)}")
         return None
 
 if __name__ == '__main__':
+
     app.run(debug=True)
